@@ -3,8 +3,11 @@
 # An example of how to create dosfstools statically for different architectures
 #
 # Used to accompany The PSCG's training/Ron Munitz's talks
-#
+
+: ${TUPLES="x86_64-linux-gnu aarch64-linux-gnu riscv64-linux-gnu arm-linux-gnueabi i686-linux-gnu loongarch64-linux-gnu"}
+: ${MORE_TUPLES="alpha-linux-gnu arc-linux-gnu m68k-linux-gnu mips64-linux-gnuabi64 mips64el-linux-gnuabi64 mips-linux-gnu mipsel-linux-gnu powerpc-linux-gnu powerpc64-linux-gnu powerpc64le-linux-gnu sh4-linux-gnu sparc64-linux-gnu s390x-linux-gnu"}
 : ${SRC_PROJECT=$(readlink -f ./dosfstools)}
+: ${GIT_REF=v4.2}
 : ${USE_MULTILIB_FOR_32BIT_X86=false}	# if true - use -m32. This conflicts with all cross-compilers. A better alternative for 2025 is to use native toolchain distro, i686-linux-gnu-...
 
 # ./configure vs. make:
@@ -47,11 +50,10 @@ build_with_installing() (
 # The function above can be used from outside a script, assuming that the CROSS_COMPILE variable is set
 # It may however need more configuration if you do not build for gnulibc
 build_for_several_tuples() {
-	for tuple in x86_64-linux-gnu aarch64-linux-gnu riscv64-linux-gnu arm-linux-gnueabi i686-linux-gnu loongarch64-linux-gnu ; do
+	for tuple in $TUPLES $MORE_TUPLES ; do
 		export CROSS_COMPILE=${tuple}- # we'll later strip it but CROSS_COMPILE is super standard, and autotools is "a little less standard"
 		build_with_installing $tuple-build $tuple-install 2> err.$tuple
 	done
-
 }
 
 #
@@ -70,12 +72,13 @@ build_and_install_32bitx86_on_x86_64() {
 }
 
 fetch() (
-	git clone https://github.com/dosfstools/dosfstools.git -b v4.2
+	[ "$1" = "dontfetch" ] && return
+	git clone https://github.com/dosfstools/dosfstools.git -b $GIT_REF
 	cd dosfstools && ./autogen.sh
 )
 
 main() {
-	fetch || exit 1
+	fetch $@ || exit 1
 	build_for_several_tuples
 	if [ "$(uname -m)" = "x86_64" ] ; then
 		if [ "$USE_MULTILIB_FOR_32BIT_X86" = "true" ] ; then
