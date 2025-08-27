@@ -27,9 +27,9 @@
 build_without_installing() (
 	mkdir $1
 	cd $1
-	$SRC_PROJECT/configure LDFLAGS=-static  --host=${CROSS_COMPILE%-} || exit 1
-	make -j$(nproc)
-	find . -executable -not -type d | xargs ${CROSS_COMPILE}strip -s
+	$SRC_PROJECT/configure LDFLAGS=-static  --host=${CROSS_COMPILE%-} || { echo -e "\x1b[31mFailed to configure for $1\x1b[0m" ; exit 1 ; }
+	make -j$(nproc) || { echo -e "\x1b[31mFailed to build for $1\x1b[0m" ; exit 1 ; }
+	find . -executable -not -type d | xargs ${CROSS_COMPILE}strip -s || { echo -e "\x1b[31mFailed to strip for $1\x1b[0m" ; exit 1 ; }
 )
 
 
@@ -41,8 +41,8 @@ build_with_installing() (
 	installdir=$(readlink -f $2)
 	mkdir $1 # You must create the build and install directories. make will not do that for you
 	cd $1
-	$SRC_PROJECT/configure LDFLAGS=--static  --host=${CROSS_COMPILE%-} || exit 1
-	make -j$(nproc) DESTDIR=$installdir install-strip 
+	$SRC_PROJECT/configure LDFLAGS=--static  --host=${CROSS_COMPILE%-} || { echo -e "\x1b[31mFailed to configure for $installdir\x1b[0m" ; exit 1 ; }
+	make -j$(nproc) DESTDIR=$installdir install-strip  || { echo -e "\x1b[31mFailed to build/install/strip for $installdir\x1b[0m" ; exit 1 ; }
 )
 
 
@@ -50,10 +50,16 @@ build_with_installing() (
 # The function above can be used from outside a script, assuming that the CROSS_COMPILE variable is set
 # It may however need more configuration if you do not build for gnulibc
 build_for_several_tuples() {
+	local failing_tuples=""
 	for tuple in $TUPLES $MORE_TUPLES ; do
 		export CROSS_COMPILE=${tuple}- # we'll later strip it but CROSS_COMPILE is super standard, and autotools is "a little less standard"
-		build_with_installing $tuple-build $tuple-install 2> err.$tuple
+		build_with_installing $tuple-build $tuple-install 2> err.$tuple || failing_tuples="$failing_tuples $tuple"
 	done
+	if [ -z "$failing_tuples" ] ; then
+		echo -e "\x1b[32mDone\x1b[0m"
+	else
+		echo -e "\x1b[33mDone\x1b[0m You can see errors in $(for x in $failing_tuples ; do echo err.$x ; done)"
+	fi
 }
 
 #
@@ -67,7 +73,7 @@ build_and_install_32bitx86_on_x86_64() {
 	mkdir $builddir
 	cd $builddir || exit 1
 	$SRC_PROJECT/configure LDFLAGS="--static -m32" CFLAGS=-m32 || exit 1
-	make -j$(nproc) DESTDIR=$installdir install-strip 2>err.$tuple
+	make -j$(nproc) DESTDIR=$installdir install-strip 2>err.$tuple || failing_tuples="$failing_tuples $tuple"
 
 }
 
